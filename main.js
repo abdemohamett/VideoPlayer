@@ -1,3 +1,16 @@
+const API_KEY = 'AIzaSyBUiImEhXHNG4huchqrTHB5-YORsaNs0e4';
+
+const videos = [
+    { src: 'VDXeaTnSBUE' },
+    { src: 'aJgnXwpEWso' },
+    { src: 'eTylF8r7Yf4' }
+];
+
+// Global variable for YouTube player
+let player;
+let isPlaying = false;
+let videoIndex = 0;
+
 // Select DOM elements
 const videoElement = document.getElementById('video');
 const playBtn = document.getElementById('play');
@@ -5,147 +18,157 @@ const prevBtn = document.getElementById('prev');
 const nextBtn = document.getElementById('next');
 const title = document.getElementById('title');
 const artist = document.getElementById('artist');
-const currentTimeEl = document.getElementById('current-time');
-const durationEl = document.getElementById('duration');
-const progress = document.querySelector('.progress');
-const progressContainer = document.querySelector('.progress-bar');
 const volumeSlider = document.getElementById('volume');
 const speedSelect = document.getElementById('speed');
+const progressBar = document.querySelector('.progress');
+const currentTimeEl = document.getElementById('current-time');
+const durationEl = document.getElementById('duration');
 
-// Video data
-const videos = [
-    { 
-        title: 'Ocean Video', 
-        artist: 'Local Media', 
-        src: './media/video.mp4'
-    },
-    { 
-        title: 'Nature Video', 
-        artist: 'Local Media', 
-        src: './media/video2.mp4'
-    },
-    { 
-        title: 'City Video', 
-        artist: 'Local Media', 
-        src: './media/video3.mp4'
+// Fetch video details from YouTube
+async function fetchVideoDetails() {
+    for (let video of videos) {
+        try {
+            const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${video.src}&key=${API_KEY}`);
+            const data = await response.json();
+            if (data.items && data.items[0]) {
+                const snippet = data.items[0].snippet;
+                video.title = snippet.title;
+                video.artist = snippet.channelTitle;
+            }
+        } catch (error) {
+            console.error('Error fetching video details:', error);
+            video.title = 'Video Title Unavailable';
+            video.artist = 'Unknown Artist';
+        }
     }
-];
+    // Load first video after fetching details
+    loadVideo(videos[0]);
+}
 
-// Keep track of videos
-let videoIndex = 0;
-let isPlaying = false;
-let speed = 1;
+// Set initial video source
+videoElement.src = `https://www.youtube.com/embed/${videos[0].src}?enablejsapi=1&controls=0&modestbranding=1`;
+
+// Load YouTube IFrame API
+const tag = document.createElement('script');
+tag.src = "https://www.youtube.com/iframe_api";
+const firstScriptTag = document.getElementsByTagName('script')[0];
+firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+// Initialize player after API loads
+window.onYouTubeIframeAPIReady = function() {
+    player = new YT.Player('video', {
+        events: {
+            'onReady': onPlayerReady,
+            'onStateChange': onPlayerStateChange
+        }
+    });
+};
+
+// Player Ready Event
+function onPlayerReady(event) {
+    // Fetch video details first
+    fetchVideoDetails();
+    
+    // Set up volume control
+    volumeSlider.addEventListener('input', () => {
+        player.setVolume(volumeSlider.value * 100);
+    });
+
+    // Set up playback speed
+    speedSelect.addEventListener('change', () => {
+        player.setPlaybackRate(parseFloat(speedSelect.value));
+    });
+
+    // Update progress bar
+    setInterval(updateProgress, 1000);
+}
+
+// Player State Change Event
+function onPlayerStateChange(event) {
+    if (event.data === YT.PlayerState.ENDED) {
+        nextVideo();
+    } else if (event.data === YT.PlayerState.PLAYING) {
+        playBtn.querySelector('i').classList.replace('fa-play', 'fa-pause');
+        isPlaying = true;
+    } else if (event.data === YT.PlayerState.PAUSED) {
+        playBtn.querySelector('i').classList.replace('fa-pause', 'fa-play');
+        isPlaying = false;
+    }
+}
 
 // Load video details
 function loadVideo(video) {
     title.textContent = video.title;
     artist.textContent = video.artist;
-    
-    // Reset video source
-    videoElement.src = video.src;
-    
-    // Add error handling
-    videoElement.onerror = function() {
-        console.error('Error loading video:', video.src);
-        title.textContent = 'Error loading video';
-        artist.textContent = 'Please try another video';
-        
-        // Try to load next video after 3 seconds if current one fails
-        setTimeout(() => {
-            nextVideo();
-        }, 3000);
-    };
-
-    // Add loading indicator
-    videoElement.onloadstart = function() {
-        title.textContent = 'Loading...';
-    };
-
-    // Reset progress bar
-    progress.style.width = '0%';
-    currentTimeEl.textContent = '0:00';
-    durationEl.textContent = '0:00';
-    
-    // Update title and artist once video is ready
-    videoElement.oncanplay = function() {
-        title.textContent = video.title;
-        artist.textContent = video.artist;
-    };
+    if (player && player.loadVideoById) {
+        player.loadVideoById(video.src);
+    } else {
+        videoElement.src = `https://www.youtube.com/embed/${video.src}?enablejsapi=1&controls=0&modestbranding=1`;
+    }
 }
 
-// Play video
+// Play/Pause functionality
 function playVideo() {
-    playBtn.querySelector('i').classList.replace('fa-play', 'fa-pause');
-    videoElement.play();
-    isPlaying = true;
+    if (player && player.playVideo) {
+        player.playVideo();
+    }
 }
 
-// Pause video
 function pauseVideo() {
-    playBtn.querySelector('i').classList.replace('fa-pause', 'fa-play');
-    videoElement.pause();
-    isPlaying = false;
+    if (player && player.pauseVideo) {
+        player.pauseVideo();
+    }
 }
 
 // Previous video
 function prevVideo() {
     videoIndex = (videoIndex - 1 + videos.length) % videos.length;
     loadVideo(videos[videoIndex]);
-    playVideo();
 }
 
 // Next video
 function nextVideo() {
     videoIndex = (videoIndex + 1) % videos.length;
     loadVideo(videos[videoIndex]);
-    playVideo();
 }
 
-// Update progress bar
+// Update progress bar and time
 function updateProgress() {
-    const { duration, currentTime } = videoElement;
-    if (!isNaN(duration)) {
-        const progressPercent = (currentTime / duration) * 100;
-        progress.style.width = `${progressPercent}%`;
-
-        const durationMinutes = Math.floor(duration / 60);
-        const durationSeconds = Math.floor(duration % 60).toString().padStart(2, '0');
-        durationEl.textContent = `${durationMinutes}:${durationSeconds}`;
-
-        const currentMinutes = Math.floor(currentTime / 60);
-        const currentSeconds = Math.floor(currentTime % 60).toString().padStart(2, '0');
-        currentTimeEl.textContent = `${currentMinutes}:${currentSeconds}`;
+    if (player && player.getCurrentTime && player.getDuration) {
+        const currentTime = player.getCurrentTime() || 0;
+        const duration = player.getDuration() || 0;
+        const progress = (currentTime / duration) * 100;
+        
+        progressBar.style.width = `${progress}%`;
+        
+        currentTimeEl.textContent = formatTime(currentTime);
+        durationEl.textContent = formatTime(duration);
     }
 }
 
-// Set video time
-function setProgress(e) {
-    const newTime = (e.offsetX / progressContainer.clientWidth) * videoElement.duration;
-    videoElement.currentTime = isFinite(newTime) ? newTime : 0;
+// Format time in minutes:seconds
+function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
+
+// Click on progress bar to seek
+document.querySelector('.progress-bar').addEventListener('click', (e) => {
+    if (player && player.getDuration) {
+        const progressBar = e.currentTarget;
+        const clickPosition = e.offsetX / progressBar.offsetWidth;
+        const seekTime = clickPosition * player.getDuration();
+        player.seekTo(seekTime);
+    }
+});
 
 // Event listeners
 playBtn.addEventListener('click', () => isPlaying ? pauseVideo() : playVideo());
 prevBtn.addEventListener('click', prevVideo);
 nextBtn.addEventListener('click', nextVideo);
-videoElement.addEventListener('timeupdate', updateProgress);
-progressContainer.addEventListener('click', setProgress);
-volumeSlider.addEventListener('input', e => videoElement.volume = e.target.value);
-speedSelect.addEventListener('change', e => videoElement.playbackRate = parseFloat(e.target.value));
 
-// Load initial video
-loadVideo(videos[videoIndex]);
-
-// Add these event listeners at the bottom of your file
-videoElement.addEventListener('ended', nextVideo); // Auto play next video when current one ends
-videoElement.addEventListener('loadedmetadata', () => {
-    // Update duration once video metadata is loaded
-    const durationMinutes = Math.floor(videoElement.duration / 60);
-    const durationSeconds = Math.floor(videoElement.duration % 60).toString().padStart(2, '0');
-    durationEl.textContent = `${durationMinutes}:${durationSeconds}`;
-});
-
-// Add keyboard controls
+// Keyboard controls
 document.addEventListener('keydown', (e) => {
     switch(e.key.toLowerCase()) {
         case ' ':
@@ -159,7 +182,11 @@ document.addEventListener('keydown', (e) => {
             prevVideo();
             break;
         case 'm':
-            videoElement.muted = !videoElement.muted;
+            if (player && player.getVolume && player.setVolume) {
+                const currentVolume = player.getVolume();
+                player.setVolume(currentVolume === 0 ? 100 : 0);
+                volumeSlider.value = currentVolume === 0 ? 1 : 0;
+            }
             break;
     }
 });

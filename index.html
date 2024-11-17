@@ -6,13 +6,18 @@
     <title>Modern Video Player</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta http-equiv="Content-Security-Policy" content="frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com">
 </head>
 <body>
     <div class="video-player">
         <div class="video-info">
-            <video id="video" width="100%" controls>
-                <!-- Remove the source element, we'll set it via JavaScript -->
-            </video>
+            <iframe id="video" 
+                    width="100%" 
+                    height="315" 
+                    frameborder="0" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allowfullscreen>
+            </iframe>
             <h2 id="title">Video Title</h2>
             <p id="artist">Artist Name</p>
         </div>
